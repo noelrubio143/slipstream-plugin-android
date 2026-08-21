@@ -1,4 +1,4 @@
-ygname: Android Rust Build
+name: Android Rust Build
 
 on:
   push:
