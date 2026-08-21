@@ -62,11 +62,11 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Run Gradle build
-        run: ./gradlew :app:cargoBuildArm64 bundleRelease --parallel
+      - name: Build Rust native library
+        run: ./gradlew :app:cargoBuildArm64 --parallel
 
-      - name: Upload AAB
+      - name: Upload .so library
         uses: actions/upload-artifact@v4
         with:
-          name: app-release-aab
-          path: app/build/outputs/bundle/release/*.aab
+          name: libslipstream-arm64
+          path: app/src/main/jniLibs/arm64-v8a/*.so
