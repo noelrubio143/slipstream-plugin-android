@@ -26,7 +26,7 @@ jobs:
       - name: Accept licenses and install NDK
         run: |
           yes | sdkmanager --licenses || true
-          sdkmanager --install "ndk;26.1.10909125"
+          sdkmanager --install "ndk;27.2.12479018"
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
