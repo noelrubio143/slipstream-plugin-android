@@ -1,13 +1,4 @@
-- name: Setup Rust + Android NDK
-  run: |
-    # Install Rust Android targets
-    rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android i686-linux-android
-    cargo install cargo-ndk
-
-    # Install NDK via sdkmanager (usually preinstalled sa Android runner image)
-    yes | sdkmanager --install "ndk;26.1.10909125"
-    echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/26.1.10909125" >> $GITHUB_ENV
-    echo "ANDROID_NDK_ROOT=$ANDROID_SDK_ROOT/ndk/26.1.10909125" >> $GITHUB_ENV
-
-- name: Run Gradle build
-  run: ./gradlew :app:cargoBuildArm64 --parallel
+- name: Install Rust
+  uses: dtolnay/rust-action@stable
+  with:
+    targets: aarch64-linux-android, armv7-linux-androideabi, x86_64-linux-android, i686-linux-android
