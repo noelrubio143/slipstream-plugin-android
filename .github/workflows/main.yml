@@ -31,7 +31,25 @@ jobs:
           sdkmanager --install "ndk;27.2.12479018"
 
       - name: Install build dependencies
-        run: sudo apt-get update && sudo apt-get install -y libssl-dev cmake
+        run: sudo apt-get update && sudo apt-get install -y cmake
+
+      - name: Set up Android OpenSSL (arm64)
+        run: |
+          mkdir -p "$HOME/.openssl-android"
+          cd "$HOME/.openssl-android"
+          curl -L -o android-openssl.zip \
+            https://github.com/KDAB/android_openssl/archive/refs/heads/master.zip
+          unzip -q android-openssl.zip
+          mkdir -p arm64-v8a/lib arm64-v8a/include
+          SRC="android_openssl-master/ssl_3/arm64-v8a"
+          cp "$SRC"/libcrypto*.a arm64-v8a/lib/libcrypto.a
+          cp "$SRC"/libssl*.a arm64-v8a/lib/libssl.a
+          cp -r android_openssl-master/ssl_3/include/* arm64-v8a/include/ 2>/dev/null || \
+            cp -r android_openssl-master/include/* arm64-v8a/include/
+          echo "OPENSSL_ROOT_DIR=$HOME/.openssl-android/arm64-v8a" >> $GITHUB_ENV
+          echo "OPENSSL_CRYPTO_LIBRARY=$HOME/.openssl-android/arm64-v8a/lib/libcrypto.a" >> $GITHUB_ENV
+          echo "OPENSSL_SSL_LIBRARY=$HOME/.openssl-android/arm64-v8a/lib/libssl.a" >> $GITHUB_ENV
+          echo "OPENSSL_INCLUDE_DIR=$HOME/.openssl-android/arm64-v8a/include" >> $GITHUB_ENV
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
