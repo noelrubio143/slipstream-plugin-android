@@ -33,27 +33,23 @@ jobs:
       - name: Install build dependencies
         run: sudo apt-get update && sudo apt-get install -y cmake
 
-      - name: Set up Android OpenSSL (all ABIs)
+      - name: Set up Android OpenSSL (arm64)
         run: |
           mkdir -p "$HOME/.openssl-android"
           cd "$HOME/.openssl-android"
           curl -L -o android-openssl.zip \
             https://github.com/KDAB/android_openssl/archive/refs/heads/master.zip
           unzip -q android-openssl.zip
-
-          for ABI in arm64-v8a armeabi-v7a x86 x86_64; do
-            mkdir -p "$ABI/lib" "$ABI/include"
-            SRC="android_openssl-master/ssl_3/$ABI"
-            cp "$SRC"/libcrypto*.a "$ABI/lib/libcrypto.a"
-            cp "$SRC"/libssl*.a "$ABI/lib/libssl.a"
-            cp -r android_openssl-master/ssl_3/include/* "$ABI/include/" 2>/dev/null || \
-              cp -r android_openssl-master/include/* "$ABI/include/"
-          done
-
-          echo "OPENSSL_ROOT_DIR_ARM64=$HOME/.openssl-android/arm64-v8a" >> $GITHUB_ENV
-          echo "OPENSSL_ROOT_DIR_ARMV7=$HOME/.openssl-android/armeabi-v7a" >> $GITHUB_ENV
-          echo "OPENSSL_ROOT_DIR_X86=$HOME/.openssl-android/x86" >> $GITHUB_ENV
-          echo "OPENSSL_ROOT_DIR_X86_64=$HOME/.openssl-android/x86_64" >> $GITHUB_ENV
+          mkdir -p arm64-v8a/lib arm64-v8a/include
+          SRC="android_openssl-master/ssl_3/arm64-v8a"
+          cp "$SRC"/libcrypto*.a arm64-v8a/lib/libcrypto.a
+          cp "$SRC"/libssl*.a arm64-v8a/lib/libssl.a
+          cp -r android_openssl-master/ssl_3/include/* arm64-v8a/include/ 2>/dev/null || \
+            cp -r android_openssl-master/include/* arm64-v8a/include/
+          echo "OPENSSL_ROOT_DIR=$HOME/.openssl-android/arm64-v8a" >> $GITHUB_ENV
+          echo "OPENSSL_CRYPTO_LIBRARY=$HOME/.openssl-android/arm64-v8a/lib/libcrypto.a" >> $GITHUB_ENV
+          echo "OPENSSL_SSL_LIBRARY=$HOME/.openssl-android/arm64-v8a/lib/libssl.a" >> $GITHUB_ENV
+          echo "OPENSSL_INCLUDE_DIR=$HOME/.openssl-android/arm64-v8a/include" >> $GITHUB_ENV
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -66,17 +62,107 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Build Rust native library (all ABIs)
-        run: ./gradlew :app:cargoBuildArm64 :app:cargoBuildArm :app:cargoBuildX86 :app:cargoBuildX86_64 --parallel
+      - name: Build Rust native library
+        run: ./gradlew :app:cargoBuildArm64 --parallel
 
       - name: Locate .so files
         run: find . -iname "*.so" 2>/dev/null
 
-      - name: Upload .so libraries
+      - name: Upload .so library
         uses: actions/upload-artifact@v4
         with:
-          name: libslipstream-all-abis
+          name: libslipstream
           path: |
             app/src/main/jniLibs/**/*.so
             app/build/rustJniLibs/**/*.so
           if-no-files-found: warn
+
+# ---------------------------------------------------------------------------
+# ALTERNATE VERSION BELOW (all ABIs) — commented out, kept for reference.
+# Failed last run: FindOpenSSL.cmake couldn't find OpenSSL (env var name
+# mismatch) and "picoquic auto-build failed" in cargoBuildArm64.
+# Needs CMakeLists.txt + scripts/build_picoquic.sh reviewed before reuse.
+# ---------------------------------------------------------------------------
+#
+# name: Android Rust Build
+#
+# on:
+#   push:
+#     branches: [ master ]
+#   pull_request:
+#     branches: [ master ]
+#
+# jobs:
+#   build:
+#     runs-on: ubuntu-latest
+#
+#     steps:
+#       - name: Checkout
+#         uses: actions/checkout@v4
+#         with:
+#           submodules: recursive
+#
+#       - name: Set up JDK
+#         uses: actions/setup-java@v4
+#         with:
+#           java-version: '17'
+#           distribution: 'temurin'
+#
+#       - name: Set up Android SDK
+#         uses: android-actions/setup-android@v3
+#
+#       - name: Accept licenses and install NDK
+#         run: |
+#           yes | sdkmanager --licenses || true
+#           sdkmanager --install "ndk;27.2.12479018"
+#
+#       - name: Install build dependencies
+#         run: sudo apt-get update && sudo apt-get install -y cmake
+#
+#       - name: Set up Android OpenSSL (all ABIs)
+#         run: |
+#           mkdir -p "$HOME/.openssl-android"
+#           cd "$HOME/.openssl-android"
+#           curl -L -o android-openssl.zip \
+#             https://github.com/KDAB/android_openssl/archive/refs/heads/master.zip
+#           unzip -q android-openssl.zip
+#
+#           for ABI in arm64-v8a armeabi-v7a x86 x86_64; do
+#             mkdir -p "$ABI/lib" "$ABI/include"
+#             SRC="android_openssl-master/ssl_3/$ABI"
+#             cp "$SRC"/libcrypto*.a "$ABI/lib/libcrypto.a"
+#             cp "$SRC"/libssl*.a "$ABI/lib/libssl.a"
+#             cp -r android_openssl-master/ssl_3/include/* "$ABI/include/" 2>/dev/null || \
+#               cp -r android_openssl-master/include/* "$ABI/include/"
+#           done
+#
+#           echo "OPENSSL_ROOT_DIR_ARM64=$HOME/.openssl-android/arm64-v8a" >> $GITHUB_ENV
+#           echo "OPENSSL_ROOT_DIR_ARMV7=$HOME/.openssl-android/armeabi-v7a" >> $GITHUB_ENV
+#           echo "OPENSSL_ROOT_DIR_X86=$HOME/.openssl-android/x86" >> $GITHUB_ENV
+#           echo "OPENSSL_ROOT_DIR_X86_64=$HOME/.openssl-android/x86_64" >> $GITHUB_ENV
+#
+#       - name: Install Rust
+#         uses: dtolnay/rust-toolchain@stable
+#         with:
+#           targets: aarch64-linux-android, armv7-linux-androideabi, x86_64-linux-android, i686-linux-android
+#
+#       - name: Install cargo-ndk
+#         run: cargo install cargo-ndk
+#
+#       - name: Grant execute permission for gradlew
+#         run: chmod +x gradlew
+#
+#       - name: Build Rust native library (all ABIs)
+#         run: ./gradlew :app:cargoBuildArm64 :app:cargoBuildArm :app:cargoBuildX86 :app:cargoBuildX86_64 --parallel
+#
+#       - name: Locate .so files
+#         run: find . -iname "*.so" 2>/dev/null
+#
+#       - name: Upload .so libraries
+#         uses: actions/upload-artifact@v4
+#         with:
+#           name: libslipstream-all-abis
+#           path: |
+#             app/src/main/jniLibs/**/*.so
+#             app/build/rustJniLibs/**/*.so
+#           if-no-files-found: warn
