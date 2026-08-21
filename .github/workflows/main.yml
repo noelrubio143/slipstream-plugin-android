@@ -27,7 +27,7 @@ jobs:
         run: sdkmanager --install "ndk;26.1.10909125"
 
       - name: Install Rust
-        uses: dtolnay/rust-action@stable
+        uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-linux-android, armv7-linux-androideabi, x86_64-linux-android, i686-linux-android
 
