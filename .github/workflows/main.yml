@@ -37,7 +37,7 @@ jobs:
           packages: 'platform-tools'
 
       - name: Install NDK and CMake
-        run: sdkmanager "ndk;27.2.12479018" "cmake;3.22.1"
+        run: sdkmanager "ndk;27.2.12479018" "cmake;3.31.6"
 
       - name: Create local.properties
         run: echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
@@ -47,10 +47,40 @@ jobs:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         run: echo "$KEYSTORE_BASE64" | base64 -d > "$GITHUB_WORKSPACE/release.jks"
 
+      - name: Add cmake wrapper (OpenSSL libs fix)
+        run: |
+          REAL_CMAKE=$(command -v cmake)
+          mkdir -p "$RUNNER_TEMP/cmakewrap"
+          cat > "$RUNNER_TEMP/cmakewrap/cmake" <<EOF
+          #!/bin/bash
+          REAL="$REAL_CMAKE"
+          EOF
+          cat >> "$RUNNER_TEMP/cmakewrap/cmake" <<'EOF'
+          case "$1" in --build|--install|-E|--version|--help) exec "$REAL" "$@";; esac
+          EXTRA=()
+          if [ -n "$OPENSSL_ROOT_DIR" ]; then
+            CRYPTO=$(find "$OPENSSL_ROOT_DIR" \( -name libcrypto.a -o -name libcrypto.so \) | sort | head -1)
+            SSL=$(find "$OPENSSL_ROOT_DIR" \( -name libssl.a -o -name libssl.so \) | sort | head -1)
+            echo "cmake-wrapper: root=$OPENSSL_ROOT_DIR crypto=${CRYPTO:-none} ssl=${SSL:-none}" >&2
+            if [ -n "$CRYPTO" ]; then
+              EXTRA+=(-DOPENSSL_CRYPTO_LIBRARY="$CRYPTO" -DOPENSSL_SSL_LIBRARY="$SSL" -DOPENSSL_INCLUDE_DIR="${OPENSSL_INCLUDE_DIR:-$OPENSSL_ROOT_DIR/include}" -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=BOTH -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=BOTH)
+            fi
+          fi
+          exec "$REAL" "${EXTRA[@]}" "$@"
+          EOF
+          chmod +x "$RUNNER_TEMP/cmakewrap/cmake"
+          echo "$RUNNER_TEMP/cmakewrap" >> "$GITHUB_PATH"
+
       - name: Build Release APKs
         run: |
           chmod +x ./gradlew
           ./gradlew assembleRelease -PversionName=${{ github.event.inputs.tag_name }} -Pandroid.injected.build.abi=armeabi-v7a
+
+      - name: Debug OpenSSL libs
+        if: failure()
+        run: |
+          find "$GITHUB_WORKSPACE" -name "libcrypto*" 2>/dev/null | head -20
+          ls -la app/src/main/rust/slipstream-rust/scripts 2>/dev/null || true
 
       - name: Align and sign 32-bit APK
         env:
