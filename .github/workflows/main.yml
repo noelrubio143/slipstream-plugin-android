@@ -52,9 +52,20 @@ jobs:
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
         run: |
-          echo "size: $(wc -c < "$GITHUB_WORKSPACE/release.jks") bytes"
-          echo "first bytes (hex): $(head -c 4 "$GITHUB_WORKSPACE/release.jks" | od -An -tx1)"
-          keytool -list -keystore "$GITHUB_WORKSPACE/release.jks" -storepass "$KEYSTORE_PASSWORD" 2>&1 | head -8
+          KS="$GITHUB_WORKSPACE/release.jks"
+          echo "size: $(wc -c < "$KS" 2>/dev/null || echo 0) bytes"
+          echo "first bytes (hex): $(head -c 4 "$KS" 2>/dev/null | od -An -tx1)"
+          if keytool -list -keystore "$KS" -storepass "$KEYSTORE_PASSWORD" >/dev/null 2>&1; then
+            echo "Keystore OK"
+          else
+            echo "::warning::Keystore secret is invalid or password is wrong. Using a TEMPORARY keystore. Fix KEYSTORE_BASE64 / KEYSTORE_PASSWORD for a real release key."
+            rm -f "$KS"
+            keytool -genkeypair -keystore "$KS" -storetype PKCS12 \
+              -alias fallback -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass android -keypass android \
+              -dname "CN=Temporary, O=Temporary, C=US"
+            touch "$GITHUB_WORKSPACE/.fallback-keystore"
+          fi
 
       - name: Add cmake wrapper (OpenSSL libs fix)
         run: |
@@ -98,6 +109,10 @@ jobs:
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
           TAG: ${{ github.event.inputs.tag_name }}
         run: |
+          if [ -f "$GITHUB_WORKSPACE/.fallback-keystore" ]; then
+            export KEY_ALIAS=fallback KEYSTORE_PASSWORD=android KEY_PASSWORD=android
+            echo "Signing with TEMPORARY keystore"
+          fi
           BT=$(ls -d "$ANDROID_SDK_ROOT"/build-tools/* | sort -V | tail -1)
           echo "All APKs found:"
           find "$GITHUB_WORKSPACE" -name '*.apk' 2>/dev/null
