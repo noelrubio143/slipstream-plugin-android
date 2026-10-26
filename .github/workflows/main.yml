@@ -90,25 +90,29 @@ jobs:
           TAG: ${{ github.event.inputs.tag_name }}
         run: |
           BT=$(ls -d "$ANDROID_SDK_ROOT"/build-tools/* | sort -V | tail -1)
-          cd app/build/outputs/apk/release
-          ls -la
-          APK=$(ls *armeabi-v7a*.apk 2>/dev/null | head -1)
-          if [ -z "$APK" ]; then APK=$(ls *.apk | head -1); fi
+          echo "All APKs found:"
+          find "$GITHUB_WORKSPACE" -name '*.apk' 2>/dev/null
+          APK=$(find "$GITHUB_WORKSPACE" -type f -name '*.apk' -path '*release*' 2>/dev/null | grep -i 'v7a' | head -1 || true)
+          if [ -z "$APK" ]; then
+            APK=$(find "$GITHUB_WORKSPACE" -type f -name '*.apk' -path '*release*' 2>/dev/null | head -1 || true)
+          fi
+          if [ -z "$APK" ]; then echo "No release APK found"; exit 1; fi
           echo "Using: $APK"
-          "$BT/zipalign" -f -p 4 "$APK" aligned.apk
+          mkdir -p "$GITHUB_WORKSPACE/out"
+          "$BT/zipalign" -f -p 4 "$APK" "$GITHUB_WORKSPACE/out/aligned.apk"
           "$BT/apksigner" sign \
             --ks "$GITHUB_WORKSPACE/release.jks" \
             --ks-key-alias "$KEY_ALIAS" \
             --ks-pass env:KEYSTORE_PASSWORD \
             --key-pass env:KEY_PASSWORD \
-            --out "slipstream-$TAG-armeabi-v7a-release.apk" \
-            aligned.apk
-          "$BT/apksigner" verify --print-certs "slipstream-$TAG-armeabi-v7a-release.apk"
+            --out "$GITHUB_WORKSPACE/out/slipstream-$TAG-armeabi-v7a-release.apk" \
+            "$GITHUB_WORKSPACE/out/aligned.apk"
+          "$BT/apksigner" verify --print-certs "$GITHUB_WORKSPACE/out/slipstream-$TAG-armeabi-v7a-release.apk"
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.inputs.tag_name }}
-          files: app/build/outputs/apk/release/slipstream-${{ github.event.inputs.tag_name }}-armeabi-v7a-release.apk
+          files: out/slipstream-${{ github.event.inputs.tag_name }}-armeabi-v7a-release.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
